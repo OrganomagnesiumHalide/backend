@@ -46,7 +46,7 @@ func verifyGitHubLogin(w http.ResponseWriter, r *http.Request) {
 func handler(w http.ResponseWriter, r *http.Request) {
 	host := r.Header.Get("Host")
 	if host != "fridgigator.herokuapp.com" && host != "localhost" {
-		panic("Wrong host!")
+		panic(fmt.Sprintln("Wrong host!", host))
 	}
 
 	fmt.Println(r.URL.Query())
