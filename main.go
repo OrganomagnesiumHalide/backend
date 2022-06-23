@@ -44,9 +44,9 @@ func verifyGitHubLogin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func handler(w http.ResponseWriter, r *http.Request) {
-	host := r.Header.Get("Host")
-	if host != "fridgigator.herokuapp.com" && host != "localhost" {
-		panic(fmt.Sprintln("Wrong host!", host))
+	host := r.Host
+	if host != "fridgigator.herokuapp.com" && !strings.HasPrefix(host, "localhost:") {
+		panic(fmt.Sprintf("Wrong host=%s", host))
 	}
 
 	fmt.Println(r.URL.Query())
@@ -58,12 +58,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	sendMap["redirect_uri"] = host + "/register"
 	b, err := json.Marshal(sendMap)
 	if err != nil {
-		fmt.Println("Can't serialize", sendMap)
+		panic(fmt.Sprintln("Can't serialize", sendMap))
 	}
 	fmt.Println(sendMap)
 	req, err := http.NewRequest("POST", "https://github.com/login/oauth/access_token", bytes.NewBuffer(b))
 	if err != nil {
-		fmt.Println("Can't send request")
+		panic(fmt.Sprintln("Can't send request"))
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
@@ -74,19 +74,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	fmt.Println("response Status:", resp.Status)
-	fmt.Println("response Headers:", resp.Header)
-
 	decoder := json.NewDecoder(resp.Body)
 	var githubResponse map[string]string
 	err = decoder.Decode(&githubResponse)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(githubResponse)
-	fmt.Println(r.URL.Query().Get("state"))
 	logins[r.URL.Query().Get("state")] = githubResponse["access_token"]
-	fmt.Println(logins)
 
 }
 func main() {
@@ -102,9 +96,4 @@ func main() {
 	mux.HandleFunc("/register", handler)
 	mux.HandleFunc("/verifyGitHubLogin", verifyGitHubLogin)
 	log.Fatal(http.ListenAndServe(":"+port, mux))
-}
-
-type GitHubResponse struct {
-	access_token string
-	scope        string
 }
