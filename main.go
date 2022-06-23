@@ -17,9 +17,9 @@ func verifyGitHubLogin(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("host=", r.Header.Get("Origin"))
 	nonce := r.URL.Query().Get("nonce")
 	origin := r.Header.Get("Origin")
-	fmt.Println("origin=",origin);
-	if strings.HasPrefix(origin, "http://localhost:") || strings.HasPrefix(origin, "http://localhost") || strings.HasPrefix(origin,"https://organomagnesiumhalide.github.io") {
-		fmt.Println("origin set:",origin)
+	fmt.Println("origin=", origin)
+	if strings.HasPrefix(origin, "http://localhost:") || strings.HasPrefix(origin, "http://localhost") || strings.HasPrefix(origin, "https://organomagnesiumhalide.github.io") {
+		fmt.Println("origin set:", origin)
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 	}
 	w.Header().Add("Content-Type", "application/json")
@@ -45,9 +45,9 @@ func verifyGitHubLogin(w http.ResponseWriter, r *http.Request) {
 }
 func handler(w http.ResponseWriter, r *http.Request) {
 	host := r.Header.Get("Host")
-	if host != "fridgigator.herokuapp.com" || host != "localhost" {
+	if host != "fridgigator.herokuapp.com" && host != "localhost" {
 		panic("Wrong host!")
-        }
+	}
 
 	fmt.Println(r.URL.Query())
 	code := r.URL.Query().Get("code")
@@ -55,7 +55,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	sendMap["client_id"] = "30bf4172998cc4ec684e"
 	sendMap["client_secret"] = os.Getenv("CLIENT_SECRET")
 	sendMap["code"] = code
-	sendMap["redirect_uri"] = host+"/register"
+	sendMap["redirect_uri"] = host + "/register"
 	b, err := json.Marshal(sendMap)
 	if err != nil {
 		fmt.Println("Can't serialize", sendMap)
