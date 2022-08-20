@@ -11,11 +11,13 @@ import (
 )
 
 var logins map[string]string
+var denied map[string]string
 
 func verifyGitHubLogin(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("host=", r.Header.Get("Origin"))
 	nonce := r.URL.Query().Get("nonce")
+	fmt.Println(nonce)
 	origin := r.Header.Get("Origin")
 	fmt.Println("origin=", origin)
 	if strings.HasPrefix(origin, "http://localhost:") || strings.HasPrefix(origin, "http://localhost") || strings.HasPrefix(origin, "https://organomagnesiumhalide.github.io") {
@@ -23,11 +25,20 @@ func verifyGitHubLogin(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 	}
 	w.Header().Add("Content-Type", "application/json")
-	fmt.Println(logins)
+	fmt.Println("logins=",logins)
+	fmt.Println("denied=",denied)
 	if val, exists := logins[nonce]; exists {
 		returnMap := make(map[string]any)
-		returnMap["ok"] = true
+		returnMap["ok"] = "ok"
 		returnMap["access_token"] = val
+		byteVals, err := json.Marshal(returnMap)
+		if err != nil {
+			panic(err)
+		}
+		w.Write(byteVals)
+	} else if _, exists := denied[nonce]; exists {
+		returnMap := make(map[string]any)
+		returnMap["ok"] = "denied"
 		byteVals, err := json.Marshal(returnMap)
 		if err != nil {
 			panic(err)
@@ -35,7 +46,7 @@ func verifyGitHubLogin(w http.ResponseWriter, r *http.Request) {
 		w.Write(byteVals)
 	} else {
 		returnMap := make(map[string]any)
-		returnMap["ok"] = false
+		returnMap["ok"] = "waiting"
 		byteVals, err := json.Marshal(returnMap)
 		if err != nil {
 			panic(err)
@@ -48,14 +59,17 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if host != "fridgigator.herokuapp.com" && !strings.HasPrefix(host, "localhost:") {
 		panic(fmt.Sprintf("Wrong host=%s", host))
 	}
-
 	fmt.Println(r.URL.Query())
+	if r.URL.Query().Has("error"){
+		denied[r.URL.Query().Get("state")] = ""
+		return;
+	}
 	code := r.URL.Query().Get("code")
 	sendMap := make(map[string]string)
 	sendMap["client_id"] = "30bf4172998cc4ec684e"
 	sendMap["client_secret"] = os.Getenv("CLIENT_SECRET")
 	sendMap["code"] = code
-	sendMap["redirect_uri"] = host + "/register"
+	sendMap["state"] = r.URL.Query().Get("state")
 	b, err := json.Marshal(sendMap)
 	if err != nil {
 		panic(fmt.Sprintln("Can't serialize", sendMap))
@@ -80,11 +94,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println("gr=",githubResponse);
 	logins[r.URL.Query().Get("state")] = githubResponse["access_token"]
 
 }
 func main() {
 	logins = make(map[string]string)
+	denied = make(map[string]string)
 
 	port := os.Getenv("PORT")
 
