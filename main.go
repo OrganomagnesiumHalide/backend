@@ -2,16 +2,25 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+
+	_ "github.com/lib/pq"
 )
 
 var logins map[string]string
 var denied map[string]string
+var db *sql.DB
+var privateKey *rsa.PrivateKey
 
 func verifyGitHubLogin(w http.ResponseWriter, r *http.Request) {
 
@@ -25,12 +34,23 @@ func verifyGitHubLogin(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 	}
 	w.Header().Add("Content-Type", "application/json")
-	fmt.Println("logins=",logins)
-	fmt.Println("denied=",denied)
+	fmt.Println("logins=", logins)
+	fmt.Println("denied=", denied)
 	if val, exists := logins[nonce]; exists {
 		returnMap := make(map[string]any)
 		returnMap["ok"] = "ok"
-		returnMap["access_token"] = val
+		encryptedBytes, err := rsa.EncryptOAEP(
+			sha256.New(),
+			rand.Reader,
+			&privateKey.PublicKey,
+			[]byte(val),
+			nil)
+
+		if err != nil {
+			panic(err)
+		}
+
+		returnMap["access_token"] = base64.StdEncoding.EncodeToString(encryptedBytes)
 		byteVals, err := json.Marshal(returnMap)
 		if err != nil {
 			panic(err)
@@ -60,9 +80,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		panic(fmt.Sprintf("Wrong host=%s", host))
 	}
 	fmt.Println(r.URL.Query())
-	if r.URL.Query().Has("error"){
+	if r.URL.Query().Has("error") {
 		denied[r.URL.Query().Get("state")] = ""
-		return;
+		return
 	}
 	code := r.URL.Query().Get("code")
 	sendMap := make(map[string]string)
@@ -94,11 +114,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("gr=",githubResponse);
+	fmt.Println("gr=", githubResponse)
 	logins[r.URL.Query().Get("state")] = githubResponse["access_token"]
 
 }
 func main() {
+
+	registerPrivateKey()
+
 	logins = make(map[string]string)
 	denied = make(map[string]string)
 
@@ -112,4 +135,42 @@ func main() {
 	mux.HandleFunc("/register", handler)
 	mux.HandleFunc("/verifyGitHubLogin", verifyGitHubLogin)
 	log.Fatal(http.ListenAndServe(":"+port, mux))
+}
+
+func getPrivateKeyFromDb() string {
+	rows, err := db.Query(`SELECT private_key from private_key_data`)
+	if err != nil {
+		panic(err)
+	}
+
+	defer rows.Close()
+	rows.Next()
+	var privateKeyString string
+	err = rows.Scan(&privateKeyString)
+	if err != nil {
+		panic(err)
+	}
+	return privateKeyString
+}
+func registerPrivateKey() {
+	psqlconn := fmt.Sprintf("user=postgres password=%s host=db.cldkdlstnxjwpxyqnkwb.supabase.co port=5432 dbname=postgres", os.Getenv("POSTGRES_PASSWD"))
+
+	// open database
+	var err error
+	db, err = sql.Open("postgres", psqlconn)
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+	keyString := getPrivateKeyFromDb()
+	if keyString != "" {
+		privateKey = getPrivateKeyFromString(keyString)
+	} else {
+		getPrivateKeyString := getPrivateKeyString()
+		_, err = db.Exec(`INSERT INTO private_key_data("private_key","short") values($1,$2)`, string(getPrivateKeyString), string(getPrivateKeyString)[100:2600])
+		if err != nil {
+			panic(err)
+		}
+		privateKey = getPrivateKeyFromString(getPrivateKeyString)
+	}
 }
