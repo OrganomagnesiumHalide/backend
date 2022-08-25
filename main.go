@@ -23,13 +23,20 @@ var db *sql.DB
 var privateKey *rsa.PrivateKey
 
 func verifyGitHubLogin(w http.ResponseWriter, r *http.Request) {
+        fmt.Println("Headers:")
+	for name, values := range r.Header {
+ 	   // Loop over all values for the name.
+	    for _, value := range values {
+        	fmt.Println(name, value)
+	    }
+	}
 
 	fmt.Println("host=", r.Header.Get("Origin"))
 	nonce := r.URL.Query().Get("nonce")
 	fmt.Println(nonce)
 	origin := r.Header.Get("Origin")
 	fmt.Println("origin=", origin)
-	if strings.HasPrefix(origin, "http://localhost:") || strings.HasPrefix(origin, "http://localhost") || strings.HasPrefix(origin, "https://organomagnesiumhalide.github.io") {
+	if strings.HasPrefix(origin, "http://localhost:") || strings.HasPrefix(origin, "http://localhost") || strings.HasPrefix(origin, "https://fridgigator.github.io") {
 		fmt.Println("origin set:", origin)
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 	}
