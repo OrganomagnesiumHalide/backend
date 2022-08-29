@@ -2,9 +2,7 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -23,12 +21,12 @@ var db *sql.DB
 var privateKey *rsa.PrivateKey
 
 func verifyGitHubLogin(w http.ResponseWriter, r *http.Request) {
-        fmt.Println("Headers:")
+	fmt.Println("Headers:")
 	for name, values := range r.Header {
- 	   // Loop over all values for the name.
-	    for _, value := range values {
-        	fmt.Println(name, value)
-	    }
+		// Loop over all values for the name.
+		for _, value := range values {
+			fmt.Println(name, value)
+		}
 	}
 
 	fmt.Println("host=", r.Header.Get("Origin"))
@@ -46,18 +44,11 @@ func verifyGitHubLogin(w http.ResponseWriter, r *http.Request) {
 	if val, exists := logins[nonce]; exists {
 		returnMap := make(map[string]any)
 		returnMap["ok"] = "ok"
-		encryptedBytes, err := rsa.EncryptOAEP(
-			sha256.New(),
-			rand.Reader,
-			&privateKey.PublicKey,
-			[]byte(val),
-			nil)
 
-		if err != nil {
-			panic(err)
-		}
-
+		encryptedBytes := signData(getPrivateKeyFromDb(), val)
+		returnMap["github_token"] = val
 		returnMap["access_token"] = base64.StdEncoding.EncodeToString(encryptedBytes)
+		fmt.Println("returnMap=", returnMap)
 		byteVals, err := json.Marshal(returnMap)
 		if err != nil {
 			panic(err)
@@ -126,6 +117,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 }
 func main() {
+	psqlconn := fmt.Sprintf("user=postgres password=%s host=db.cldkdlstnxjwpxyqnkwb.supabase.co port=5432 dbname=postgres", os.Getenv("POSTGRES_PASSWD"))
+
+	// open database
+	var err error
+	db, err = sql.Open("postgres", psqlconn)
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
 
 	registerPrivateKey()
 
@@ -160,21 +160,12 @@ func getPrivateKeyFromDb() string {
 	return privateKeyString
 }
 func registerPrivateKey() {
-	psqlconn := fmt.Sprintf("user=postgres password=%s host=db.cldkdlstnxjwpxyqnkwb.supabase.co port=5432 dbname=postgres", os.Getenv("POSTGRES_PASSWD"))
-
-	// open database
-	var err error
-	db, err = sql.Open("postgres", psqlconn)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
 	keyString := getPrivateKeyFromDb()
 	if keyString != "" {
 		privateKey = getPrivateKeyFromString(keyString)
 	} else {
 		getPrivateKeyString := getPrivateKeyString()
-		_, err = db.Exec(`INSERT INTO private_key_data("private_key","short") values($1,$2)`, string(getPrivateKeyString), string(getPrivateKeyString)[100:2600])
+		_, err := db.Exec(`INSERT INTO private_key_data("private_key","short") values($1,$2)`, string(getPrivateKeyString), string(getPrivateKeyString)[100:2600])
 		if err != nil {
 			panic(err)
 		}
